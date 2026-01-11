@@ -6,7 +6,7 @@ from typing import Iterable, List
 from app.models.document import Document
 
 
-def chunk_text(text: str, chunk_size: int = 300, chunk_overlap: int = 50) -> Iterable[str]:
+def _chunk_text(text: str, chunk_size: int = 300, chunk_overlap: int = 50) -> Iterable[str]:
     """Split raw text into overlapping chunks based on word count."""
     words = text.split()
     if not words:
@@ -18,6 +18,19 @@ def chunk_text(text: str, chunk_size: int = 300, chunk_overlap: int = 50) -> Ite
         if not chunk_words:
             continue
         yield " ".join(chunk_words)
+
+
+
+def chunk_text(text: str, **kwargs) -> Iterable[str]:
+    """Split raw text into overlapping chunks based on word count."""
+    words = text.split('\n')
+    for idx, item in enumerate(words):
+        if item.strip():
+            yield item
+        if idx > 100:
+            break
+
+
 
 
 def parse_text_file(path: Path, chunk_size: int = 300, chunk_overlap: int = 50) -> List[Document]:

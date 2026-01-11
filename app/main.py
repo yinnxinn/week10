@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from app.api.routes import router
 from app.core.config import settings
 
+import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
 def create_app() -> FastAPI:
     settings.ensure_directories()

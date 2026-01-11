@@ -11,6 +11,7 @@ class Settings:
     index_path: Path = storage_dir / "faiss.index"
     metadata_path: Path = storage_dir / "metadata.json"
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # model_name: str = "C:/Users/www19/.cache/huggingface/hub/models--sentence-transformers--paraphrase-albert-small-v2"#"sentence-transformers/paraphrase-albert-small-v2"
 
     @classmethod
     def ensure_directories(cls) -> None:
