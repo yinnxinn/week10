@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import random
 from transformers import BertConfig, BertModel
+import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # 1. NSP 数据处理 (确保 random 已导入)
 def create_nsp_data(paragraphs, max_seq_len):

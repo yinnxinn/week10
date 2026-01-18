@@ -3,7 +3,7 @@ import numpy as np
 
 # 1. 初始化客户端 (这里使用 Milvus Lite，会直接在本地生成一个 .db 文件，无需部署 Docker)
 # 如果你有远程 Milvus 服务器，请改为: uri="http://localhost:19530"
-client = MilvusClient("milvus_demo.db")
+client = MilvusClient("http://localhost:19530")
 
 collection_name = "demo_collection"
 
@@ -47,7 +47,7 @@ search_res = client.search(
     collection_name=collection_name,
     data=[query_vector],        # 查询向量
     limit=3,                    # 返回最近的前 3 条
-    search_params={"metric_type": "L2", "params": {}}, # 使用欧氏距离
+    search_params={"metric_type": "COSINE", "params": {}}, # 使用欧氏距离
     output_fields=["text", "subject"]  # 指定返回的非向量字段
 )
 
