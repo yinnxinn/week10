@@ -4,3 +4,4 @@
   ```熟悉docker```
 * 采用医疗病历的数据，数据有一定的结构，需要对架构做出一定的调整
 ```https://github.com/Mengqi97/chinese-medical-dataset?tab=readme-ov-file#51%E6%95%B0%E6%8D%AE%E9%9B%86%E6%B1%87%E6%80%BB```
+* 共享资料地址 https://github.com/yinnxinn/learningHub
