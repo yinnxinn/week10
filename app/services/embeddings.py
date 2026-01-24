@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Iterable
+from typing import Iterable, Union
+from pathlib import Path
+from PIL import Image
 
 import os
 
@@ -48,6 +50,16 @@ class EmbeddingService:
     def embed_query(self, query: str) -> np.ndarray:
         embedding = self.embed_documents([query])
         return embedding.reshape(1, -1)
+
+    def embed_image(self, image_source: Union[str, Path, Image.Image]) -> np.ndarray:
+        """Generate embedding for an image."""
+        if isinstance(image_source, (str, Path)):
+            image = Image.open(image_source)
+        else:
+            image = image_source
+            
+        embedding = self.model.encode(image, convert_to_numpy=True, normalize_embeddings=True)
+        return embedding.reshape(1, -1).astype("float32")
 
 
 @lru_cache(maxsize=1)

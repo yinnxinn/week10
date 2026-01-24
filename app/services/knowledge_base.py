@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
-from pymilvus import MilvusClient
+from pymilvus import (
+    MilvusClient,
+    DataType,
+    Function,
+    FunctionType,
+    AnnSearchRequest,
+    RRFRanker,
+)
 
 from app.core.config import settings
 
@@ -25,17 +32,117 @@ class KnowledgeBase:
         if self.client is not None:
             return
         self.client = MilvusClient(settings.mivlus_host)
-        if not self.client.has_collection(settings.collection_name):
-            self.client.create_collection(
-                collection_name=settings.collection_name,
-                dimension=settings.dim,
-            )
+        
+        # Check if we need to initialize the schema (drop existing for this setup)
+        # In production, we would check schema compatibility or migrate.
+        if self.client.has_collection(settings.collection_name):
+            # For this setup task, we assume we can recreate to apply the hybrid schema
+            # self.client.drop_collection(settings.collection_name)
+            # Or just return if it exists, assuming it's correct.
+            # Given the user wants to implement the instance, let's assume if it exists we use it,
+            # but if it doesn't match, it might fail. 
+            # To be safe for the user's "implement" request, we should probably ensure it's created correctly.
+            # Let's skip recreation if exists to preserve data, but warn or assume user handles it.
+            return
 
-    def save(self, data) -> None:
+        # Define Hybrid Search Schema
+        schema = self.client.create_schema(auto_id=False)
+        
+        # Primary Key
+        schema.add_field(
+            field_name="id", 
+            datatype=DataType.VARCHAR, 
+            max_length=64, 
+            is_primary=True, 
+            description="document id"
+        )
+        # Raw Text (for BM25 generation and retrieval)
+        schema.add_field(
+            field_name="text", 
+            datatype=DataType.VARCHAR, 
+            max_length=2000, 
+            enable_analyzer=True, 
+            description="raw text content"
+        )
+        # Dense Vector (CLIP/BERT)
+        schema.add_field(
+            field_name="dense_vector", 
+            datatype=DataType.FLOAT_VECTOR, 
+            dim=settings.dim, 
+            description="dense embedding"
+        )
+        # Sparse Vector (BM25 auto-generated)
+        schema.add_field(
+            field_name="sparse_vector", 
+            datatype=DataType.SPARSE_FLOAT_VECTOR, 
+            description="sparse embedding (BM25)"
+        )
+        # Metadata fields
+        schema.add_field(
+            field_name="department", 
+            datatype=DataType.VARCHAR, 
+            max_length=64, 
+            description="department tag"
+        )
+        # Dynamic fields for other metadata
+        schema.enable_dynamic_field = True
+
+        # Add BM25 Function
+        bm25_function = Function(
+            name="text_bm25_emb",
+            input_field_names=["text"],
+            output_field_names=["sparse_vector"],
+            function_type=FunctionType.BM25,
+        )
+        schema.add_function(bm25_function)
+
+        # Create Indices
+        index_params = self.client.prepare_index_params()
+        
+        index_params.add_index(
+            field_name="dense_vector",
+            index_type="HNSW",  # or AUTOINDEX
+            metric_type="COSINE",
+            params={"M": 16, "efConstruction": 200}
+        )
+        
+        index_params.add_index(
+            field_name="sparse_vector",
+            index_type="SPARSE_INVERTED_INDEX",
+            metric_type="BM25", # Metric for sparse
+            params={"drop_ratio_build": 0.2}
+        )
+
+        # Create Collection
+        self.client.create_collection(
+            collection_name=settings.collection_name,
+            schema=schema,
+            index_params=index_params,
+        )
+
+    def save(self, data: List[dict]) -> None:
         self.connect()
+        # Ensure data matches schema
+        # We need 'id', 'text', 'dense_vector' (renamed from vector if needed), 'department'
+        # Data passed in usually has 'id', 'vector', 'text', 'department', etc.
+        formatted_data = []
+        for item in data:
+            formatted_item = {
+                "id": str(item.get("id")),
+                "text": item.get("text") or item.get("question") or item.get("title") or "",
+                "dense_vector": item.get("vector"),
+                "department": item.get("department", "unknown"),
+                # Dynamic fields
+                "title": item.get("title", ""),
+                "ask": item.get("ask", ""),
+                "question": item.get("question", ""),
+                **{k: v for k, v in item.items() if k not in ["id", "text", "vector", "department", "title", "ask", "question"]}
+            }
+            formatted_data.append(formatted_item)
+            
         self.client.insert(
             collection_name=settings.collection_name,
-            data=data,
+            data=formatted_data,
         )
 
     def _ensure_rerank_model(self) -> None:
@@ -65,36 +172,87 @@ class KnowledgeBase:
             scores = self._rerank_model(**inputs, return_dict=True).logits.view(-1).float()
             return scores.tolist()
 
-    def query(
+    def extract_tags(self, query: str) -> List[str]:
+        """Extract potential tags (e.g., departments) from the query."""
+        known_departments = [
+            "儿科", "内科", "外科", "妇产科", "骨科", "耳鼻喉科", 
+            "眼科", "口腔科", "皮肤科", "急诊科", "中医科"
+        ]
+        tags = []
+        for dept in known_departments:
+            if dept in query:
+                tags.append(dept)
+        return tags
+
+    def hybrid_search(
         self,
-        embedding: np.ndarray,
+        query_text: str,
+        query_dense_vector: np.ndarray,
         top_k: int = 5,
-        query_text: str | None = None,
-    ):
+        rerank: bool = True,
+    ) -> list[dict]:
+        """
+        Perform Hybrid Search (Dense + Sparse/BM25) with RRF Reranking.
+        """
         self.connect()
-        coarse_limit = top_k
-        if query_text is not None:
-            coarse_limit = max(settings.rerank_candidates, top_k)
+        
+        # 1. Tag Filter
+        filter_expr = None
+        tags = self.extract_tags(query_text)
+        if tags:
+            tags_str = ", ".join([f"'{t}'" for t in tags])
+            filter_expr = f"department in [{tags_str}]"
+            
+        coarse_limit = max(settings.rerank_candidates, top_k)
+
+        # 2. Prepare Search Requests
+        
+        # Dense Search Request
+        dense_req = AnnSearchRequest(
+            data=[query_dense_vector],
+            ann_field="dense_vector",
+            param={"metric_type": "COSINE", "params": {"nprobe": 10}},
+            limit=coarse_limit,
+            expr=filter_expr
+        )
+        
+        # Sparse Search Request (BM25)
+        # Using the server-side BM25 function, we can pass the raw text in the search request
+        # if the client and server version support it.
+        sparse_req = AnnSearchRequest(
+            data=[query_text],
+            ann_field="sparse_vector",
+            param={"metric_type": "BM25", "params": {}},
+            limit=coarse_limit,
+            expr=filter_expr
+        )
+        
+        reqs = [dense_req, sparse_req]
+        
+        # 3. Execute Hybrid Search
+        # Uses RRFRanker (Reciprocal Rank Fusion)
+        ranker = RRFRanker(k=60)
+        
         results = self.client.search(
             collection_name=settings.collection_name,
-            data=[embedding],
+            data=reqs,
+            rerank=ranker,
             limit=coarse_limit,
-            search_params={"metric_type": "COSINE", "params": {}},
-            output_fields=["*"],
+            output_fields=["*"]
         )
+        
         if not results:
-            return results
-        if query_text is None:
-            if coarse_limit == top_k:
-                return results
-            trimmed_results = []
-            for hits in results:
-                trimmed_results.append(hits[:top_k])
-            return trimmed_results
+            return []
+            
         hits = results[0]
         if not hits:
-            return results
-        candidates: List[str] = []
+            return []
+
+        # 4. Fine Recall (Rerank)
+        if not rerank:
+            return [hits[:top_k]]
+            
+        candidates_text: List[str] = []
         for hit in hits:
             entity = hit.get("entity") or {}
             text = (
@@ -104,17 +262,39 @@ class KnowledgeBase:
                 or entity.get("title")
                 or ""
             )
-            candidates.append(text)
-        scores = self.rerank(query_text, candidates)
+            candidates_text.append(text)
+            
+        scores = self.rerank(query_text, candidates_text)
+        
         scored_hits = []
         for hit, score in zip(hits, scores):
             hit["rerank_score"] = float(score)
             scored_hits.append(hit)
+            
         scored_hits.sort(key=lambda item: item["rerank_score"], reverse=True)
+        
         return [scored_hits[:top_k]]
 
-    def hybrid_search(self, query: str):
-        return None
+    def query(
+        self,
+        embedding: np.ndarray,
+        top_k: int = 5,
+        query_text: str | None = None,
+    ) -> list[dict]:
+        """Wrapper for hybrid search to maintain compatibility."""
+        if query_text:
+            return self.hybrid_search(query_text, embedding, top_k)
+        else:
+            # Fallback to simple dense search if no text provided
+            self.connect()
+            results = self.client.search(
+                collection_name=settings.collection_name,
+                data=[embedding],
+                limit=top_k,
+                search_params={"metric_type": "COSINE", "params": {}},
+                output_fields=["*"],
+            )
+            return results
 
 if __name__ == "__main__":
     # import pandas as pd

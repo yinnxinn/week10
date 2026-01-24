@@ -8,7 +8,7 @@ from torch.nn import functional as F
 batch_size = 32        # 每次训练样本数
 block_size = 64        # 上下文长度（唐诗通常较短，64足够）
 max_iters = 5       # 训练迭代次数
-eval_interval = 500    # 每隔多少次打印一次效果
+eval_interval = 50    # 每隔多少次打印一次效果
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 n_embd = 128           # 向量维度
