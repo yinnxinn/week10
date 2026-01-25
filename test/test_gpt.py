@@ -7,8 +7,8 @@ from torch.nn import functional as F
 # ==========================================
 batch_size = 32        # 每次训练样本数
 block_size = 64        # 上下文长度（唐诗通常较短，64足够）
-max_iters = 5       # 训练迭代次数
-eval_interval = 50    # 每隔多少次打印一次效果
+max_iters = 50       # 训练迭代次数
+eval_interval = 5    # 每隔多少次打印一次效果
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 n_embd = 128           # 向量维度
@@ -159,7 +159,9 @@ class PoetryGPT(nn.Module):
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -block_size:] # 裁剪上下文
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] 
+            logits = logits[:, -1, :]
+            ### 生成的时候softmax结果以后可以有不同的decode方式： greedy， sample
+            ## todo topp ,topk , temperature, beam search
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)

@@ -115,7 +115,7 @@ if __name__ == "__main__":
     service = EmbeddingService("openai/clip-vit-base-patch32")
     
     # Text embedding
-    text = "a dog playing in the park"
+    text = "The image depicts a formal military parade with a group of uniformed personnel marching in formation. They are dressed in dark blue uniforms with white gloves and black boots, carrying rifles. The soldiers are marching in unison, showcasing discipline and precision. In the background, several flags are visible, including the Malaysian flag, indicating the event is likely taking place in Malaysia. The setting appears to be an urban area with modern buildings and trees lining the street. The atmosphere suggests a significant national or ceremonial occasion."
     text_emb = service.embed_query(text)
     print(f"Text embedding shape: {text_emb.shape}")
     print(f"Text embedding snippet: {text_emb[0][:5]}")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     # Image embedding
     # Find an image from the small dataset
     data_dir = Path(__file__).resolve().parents[2] / "data" / "small_dataset" / "images"
-    image_files = list(data_dir.glob("*.png"))
+    image_files = list(data_dir.glob("*0008.png"))
     
     if image_files:
         image_path = image_files[0]

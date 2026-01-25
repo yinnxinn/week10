@@ -69,7 +69,14 @@ class KnowledgeBase:
             field_name="dense_vector", 
             datatype=DataType.FLOAT_VECTOR, 
             dim=settings.dim, 
-            description="dense embedding"
+            description="text embedding"
+        )
+
+        schema.add_field(
+            field_name="image_vector",
+            datatype=DataType.FLOAT_VECTOR,
+            dim=settings.dim,
+            description="image embedding"
         )
         # Sparse Vector (BM25 auto-generated)
         schema.add_field(
@@ -101,6 +108,13 @@ class KnowledgeBase:
         
         index_params.add_index(
             field_name="dense_vector",
+            index_type="HNSW",  # or AUTOINDEX
+            metric_type="COSINE",
+            params={"M": 16, "efConstruction": 200}
+        )
+
+        index_params.add_index(
+            field_name="image_vector",
             index_type="HNSW",  # or AUTOINDEX
             metric_type="COSINE",
             params={"M": 16, "efConstruction": 200}
@@ -201,7 +215,7 @@ class KnowledgeBase:
         tags = self.extract_tags(query_text)
         if tags:
             tags_str = ", ".join([f"'{t}'" for t in tags])
-            filter_expr = f"department in [{tags_str}]"
+            filter_expr = '' #f"department in [{tags_str}]"
             
         coarse_limit = max(settings.rerank_candidates, top_k)
 
@@ -328,8 +342,8 @@ if __name__ == "__main__":
 
     embedding_service = EmbeddingService("openai/clip-vit-base-patch32")
     kb = KnowledgeBase()
+
     '''
-    
     # 1. Load Metadata
     base_dir = Path(__file__).resolve().parents[2]
     metadata_path = base_dir / "data" / "small_dataset" / "metadata.jsonl"
@@ -338,7 +352,7 @@ if __name__ == "__main__":
     data_items = []
     with open(metadata_path, "r", encoding="utf-8") as f:
         for line in f:
-            if line.strip():
+            if line.strip() and json.loads(line).get('text','').startswith("The image"):
                 data_items.append(json.loads(line))
     
     print(f"Loaded {len(data_items)} items.")
@@ -361,10 +375,10 @@ if __name__ == "__main__":
     print("Generating embeddings and preparing data...")
     processed_data = []
     
-    departments = [
-        "儿科", "内科", "外科", "妇产科", "骨科", "耳鼻喉科", 
-        "眼科", "口腔科", "皮肤科", "急诊科", "中医科"
-    ]
+    # departments = [
+    #     "儿科", "内科", "外科", "妇产科", "骨科", "耳鼻喉科",
+    #     "眼科", "口腔科", "皮肤科", "急诊科", "中医科"
+    # ]
     
     # Process in batches to show progress (optional, but good for 1000 items)
     batch_size = 50
@@ -380,12 +394,15 @@ if __name__ == "__main__":
         
         for j, item in enumerate(batch):
             # Assign a random department for demonstration of filtering
-            dept = random.choice(departments)
-            
+            dept = '' #random.choice(departments)
+
+            image_path = base_dir / "data" / "small_dataset" / item["image_path"]
+
             processed_item = {
                 "id": item["id"],
                 "text": item["text"],
                 "vector": vectors[j],
+                'image_vector': embedding_service.embed_image(image_path)[0],
                 "department": dept,
                 # Store image path in dynamic field for retrieval
                 "image_path": item["image_path"], 
@@ -393,14 +410,13 @@ if __name__ == "__main__":
                 "type": "image-text-pair"
             }
             processed_data.append(processed_item)
-            
         print(f"Processed {min(i + batch_size, len(data_items))}/{len(data_items)}")
 
     # 5. Save to Milvus
     print(f"Inserting {len(processed_data)} items into Milvus...")
     kb.save(processed_data)
     print("Ingestion complete.")
-    '''
+
 
     # 6. Hybrid Search Example
     print("\n" + "="*50)
@@ -414,8 +430,8 @@ if __name__ == "__main__":
     # Let's pretend we are looking for "force formula" in "儿科" (Pediatrics) - unlikely to find, 
     # but let's try a matching department if we assigned one, or just general search.
     # We assigned random departments. Let's do a general search first.
-    
-    search_text = "physics force formula Newton"
+    '''
+    search_text = "military parade"
     print(f"Query: '{search_text}'")
     
     # Generate query vector
