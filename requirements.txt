@@ -3,3 +3,6 @@ uvicorn[standard]>=0.27.0
 sentence-transformers>=2.6.0
 faiss-cpu>=1.7.4
 numpy>=1.24.0
+python-dotenv>=1.0.0
+pymilvus>=2.4.0
+datasets>=2.14.0

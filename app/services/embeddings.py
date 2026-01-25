@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import Iterable, Union
 from pathlib import Path
 from PIL import Image
 
-import os
-
 import numpy as np
+import torch
 from sentence_transformers import SentenceTransformer
+from transformers import CLIPProcessor, CLIPModel
 
 from app.core.config import settings
 
@@ -21,13 +22,16 @@ MODEL_ALIASES = {
     "clip": "sentence-transformers/clip-ViT-B-32",
     "clip-vit-b-32": "sentence-transformers/clip-ViT-B-32",
     "sentence-transformers/clip-vit-b-32": "sentence-transformers/clip-ViT-B-32",
+    "openai/clip-vit-base-patch32": "openai/clip-vit-base-patch32",
 }
-
 
 class EmbeddingService:
     def __init__(self, model_name: str | None = None):
         self.model_name = self._resolve_model_name(model_name)
-        self._model: SentenceTransformer | None = None
+        self._st_model: SentenceTransformer | None = None
+        self._clip_model: CLIPModel | None = None
+        self._clip_processor: CLIPProcessor | None = None
+        self._is_local_clip = "openai/clip-vit-base-patch32" in self.model_name or "clip-vit-base-patch32" in self.model_name
 
     @staticmethod
     def _resolve_model_name(name: str | None) -> str:
@@ -36,20 +40,46 @@ class EmbeddingService:
         if key in MODEL_ALIASES:
             return MODEL_ALIASES[key]
         return base
+        
+    def _get_local_clip_path(self):
+        # Assuming the model is in models/clip-vit-base-patch32 relative to project root
+        base_dir = Path(__file__).resolve().parents[2]
+        model_path = base_dir / "models" / "clip-vit-base-patch32"
+        if model_path.exists():
+            return str(model_path)
+        return self.model_name
 
     @property
-    def model(self) -> SentenceTransformer:
-        if self._model is None:
-            self._model = SentenceTransformer(self.model_name)
-        return self._model
+    def model(self):
+        if self._is_local_clip:
+            if self._clip_model is None:
+                path = self._get_local_clip_path()
+                print(f"Loading local CLIP model from: {path}")
+                self._clip_model = CLIPModel.from_pretrained(path)
+                self._clip_processor = CLIPProcessor.from_pretrained(path)
+            return self._clip_model
+        else:
+            if self._st_model is None:
+                self._st_model = SentenceTransformer(self.model_name)
+            return self._st_model
 
     def embed_documents(self, texts: Iterable[str]) -> np.ndarray:
-        embeddings = self.model.encode(list(texts), convert_to_numpy=True, normalize_embeddings=True)
-        return embeddings.astype("float32")
+        if self._is_local_clip:
+            # Ensure model and processor are loaded
+            _ = self.model 
+            
+            inputs = self._clip_processor(text=list(texts), return_tensors="pt", padding=True, truncation=True)
+            with torch.no_grad():
+                outputs = self.model.get_text_features(**inputs)
+            # Normalize embeddings
+            embeddings = outputs / outputs.norm(p=2, dim=-1, keepdim=True)
+            return embeddings.numpy().astype("float32")
+        else:
+            embeddings = self.model.encode(list(texts), convert_to_numpy=True, normalize_embeddings=True)
+            return embeddings.astype("float32")
 
     def embed_query(self, query: str) -> np.ndarray:
-        embedding = self.embed_documents([query])
-        return embedding.reshape(1, -1)
+        return self.embed_documents([query])
 
     def embed_image(self, image_source: Union[str, Path, Image.Image]) -> np.ndarray:
         """Generate embedding for an image."""
@@ -58,8 +88,19 @@ class EmbeddingService:
         else:
             image = image_source
             
-        embedding = self.model.encode(image, convert_to_numpy=True, normalize_embeddings=True)
-        return embedding.reshape(1, -1).astype("float32")
+        if self._is_local_clip:
+            # Ensure model and processor are loaded
+            _ = self.model
+            
+            inputs = self._clip_processor(images=image, return_tensors="pt")
+            with torch.no_grad():
+                outputs = self.model.get_image_features(**inputs)
+            # Normalize embeddings
+            embeddings = outputs / outputs.norm(p=2, dim=-1, keepdim=True)
+            return embeddings.numpy().astype("float32")
+        else:
+            embeddings = self.model.encode(image, convert_to_numpy=True, normalize_embeddings=True)
+            return embeddings.reshape(1, -1).astype("float32")
 
 
 @lru_cache(maxsize=1)
@@ -68,8 +109,33 @@ def get_embedding_service() -> EmbeddingService:
 
 
 if __name__ == "__main__":
-    service = EmbeddingService("clip")
-    vector = service.embed_query("machine learning is a data driven application")
-    print(vector.shape)
+    # Test case for local CLIP model
+    print("-" * 50)
+    print("Testing local CLIP model...")
+    service = EmbeddingService("openai/clip-vit-base-patch32")
+    
+    # Text embedding
+    text = "a dog playing in the park"
+    text_emb = service.embed_query(text)
+    print(f"Text embedding shape: {text_emb.shape}")
+    print(f"Text embedding snippet: {text_emb[0][:5]}")
+    
+    # Image embedding
+    # Find an image from the small dataset
+    data_dir = Path(__file__).resolve().parents[2] / "data" / "small_dataset" / "images"
+    image_files = list(data_dir.glob("*.png"))
+    
+    if image_files:
+        image_path = image_files[0]
+        print(f"Testing with image: {image_path}")
+        image_emb = service.embed_image(image_path)
+        print(f"Image embedding shape: {image_emb.shape}")
+        print(f"Image embedding snippet: {image_emb[0][:5]}")
+        
+        # Verify normalization (should be close to 1)
+        norm = np.linalg.norm(image_emb)
+        print(f"Image embedding norm: {norm}")
+    else:
+        print("No images found in small_dataset to test.")
 
 

@@ -20,8 +20,8 @@ class Settings:
     rerank_model_name: str = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
     rerank_candidates: int = int(os.getenv("RERANK_CANDIDATES", "20"))
 
-    mivlus_host = "http://localhost:19530"
-    collection_name = "MEDICINE_KG"
+    mivlus_host = "http://47.111.101.201:19530"
+    collection_name = "week12_kg"
     dim = 512
 
     # Text Processing Settings

@@ -60,7 +60,7 @@ class KnowledgeBase:
         schema.add_field(
             field_name="text", 
             datatype=DataType.VARCHAR, 
-            max_length=2000, 
+            max_length=8192, 
             enable_analyzer=True, 
             description="raw text content"
         )
@@ -210,7 +210,7 @@ class KnowledgeBase:
         # Dense Search Request
         dense_req = AnnSearchRequest(
             data=[query_dense_vector],
-            ann_field="dense_vector",
+            anns_field="dense_vector",
             param={"metric_type": "COSINE", "params": {"nprobe": 10}},
             limit=coarse_limit,
             expr=filter_expr
@@ -221,7 +221,7 @@ class KnowledgeBase:
         # if the client and server version support it.
         sparse_req = AnnSearchRequest(
             data=[query_text],
-            ann_field="sparse_vector",
+            anns_field="sparse_vector",
             param={"metric_type": "BM25", "params": {}},
             limit=coarse_limit,
             expr=filter_expr
@@ -233,13 +233,36 @@ class KnowledgeBase:
         # Uses RRFRanker (Reciprocal Rank Fusion)
         ranker = RRFRanker(k=60)
         
-        results = self.client.search(
-            collection_name=settings.collection_name,
-            data=reqs,
-            rerank=ranker,
-            limit=coarse_limit,
-            output_fields=["*"]
-        )
+        # NOTE: MilvusClient.search() validation might fail with AnnSearchRequest list in some versions.
+        # We use the underlying Collection object to perform hybrid search.
+        from pymilvus import Collection
+        
+        # Use the connection established by MilvusClient (usually 'default' or internal alias)
+        # MilvusClient(uri=...) sets up a connection. 
+        # If we encounter issues finding the connection, we might need to explicitly connect, 
+        # but self.connect() does create a MilvusClient.
+        # However, MilvusClient manages its own connection. 
+        # To use Collection(), we need a registered connection. 
+        # Since MilvusClient might use a generated alias, let's try to get it or fallback.
+        
+        # Safe way: use the client's internal alias if available, or just create a temp Collection with connection reuse
+        # But Collection() needs 'using' alias. 
+        # self.client._using is the alias used by MilvusClient.
+        
+        try:
+            col = Collection(settings.collection_name, using=self.client._using)
+            results = col.hybrid_search(
+                reqs,
+                ranker,
+                limit=coarse_limit,
+                output_fields=["*"]
+            )
+        except Exception as e:
+            # Fallback if _using is not accessible or other error
+            print(f"Hybrid search via Collection failed: {e}. Trying alternative...")
+            # If explicit connection is needed (MilvusClient might not register it globally as we expect)
+            # This is a fallback but unlikely needed if _using works.
+            raise e
         
         if not results:
             return []
@@ -297,50 +320,129 @@ class KnowledgeBase:
             return results
 
 if __name__ == "__main__":
-    # import pandas as pd
-    # path = 'D:/projects/classes/week10/week10/data/me/儿科5-14000.csv'
-    # datas = pd.read_csv(path, encoding='utf-8')
-    # print(datas.head())
-    # import csv
-    # with open('D:/projects/classes/week10/week10/data/me/儿科5-14000.csv', 'r') as r:
-    #     reader = csv.reader(r)
-    #
-    #     datas = list()
-    #     try:
-    #         for item in reader:
-    #             datas.append(item)
-    #     except:
-    #         print(f'读取到{len(datas)}条有效数据')
-    #
-    #     from app.services.embeddings import EmbeddingService
-    #     es = EmbeddingService("sentence-transformers/clip-ViT-B-32")
-    #
-    #     processed_data = list()
-    #     for idx, data in enumerate(datas[1:100]):
-    #         processed_data.append(
-    #             {
-    #                 "id": idx,
-    #                 'department':data[0],
-    #                 "title": data[1],
-    #                 "ask": data[2],
-    #                 "question": data[3],
-    #                 "vector": es.embed_query(data[2] + data[3])[0]
-    #
-    #             }
-    #         )
-        kg = KnowledgeBase()
-        # kg.save(processed_data)
-        query = '男孩子，已经2岁了，这几天，孩子说自己耳朵又痒又疼，早上，有黄色的耳屎流出，另外，好像没什么食欲也很乏力，请问：孩童中耳炎流黄水要如何治疗。 抗生素药物是目前治疗中耳炎比较常用的，可酌情选。如果孩子情况比较严重的话也可配合一些局部治疗，比如消炎型的滴耳剂，孩子耳痛严重的时候，也是可以适量的使用点止痛的药物，要是伴随发高烧的情况，那么根据孩子的症状使用药物，严重的情况请尽快去医院进行救治，以上都是比较常用的治疗方法，但是如果孩子出现了耳膜穿孔的症状，需要及时的去医院进行手术治疗，治疗期间主要要给孩子做好保暖工作，避免着凉加剧症状。'
-        from app.services.embeddings import EmbeddingService
-        es = EmbeddingService("sentence-transformers/clip-ViT-B-32")
-        results = kg.query(es.embed_query(query)[0])
-        cadidates = []
-        for item in results[0]:
+    
+    import json
+    import random
+    from pathlib import Path
+    from app.services.embeddings import EmbeddingService
 
-            print(item['distance'], item['entity']['title'], item['entity']['ask'], item['entity']['question'])
+    embedding_service = EmbeddingService("openai/clip-vit-base-patch32")
+    kb = KnowledgeBase()
+    '''
+    
+    # 1. Load Metadata
+    base_dir = Path(__file__).resolve().parents[2]
+    metadata_path = base_dir / "data" / "small_dataset" / "metadata.jsonl"
+    
+    print(f"Loading data from {metadata_path}...")
+    data_items = []
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                data_items.append(json.loads(line))
+    
+    print(f"Loaded {len(data_items)} items.")
+    
+    # 2. Initialize Services
+    # Use the local CLIP model we downloaded
+    
+    
+    # 3. Reset Collection (to ensure schema matches and start clean)
+    collection_name = settings.collection_name
+    if kb.client.has_collection(collection_name):
+        print(f"Dropping existing collection: {collection_name}")
+        kb.client.drop_collection(collection_name)
+        # Re-connect to trigger schema creation
+        kb.client = None 
+        kb.connect()
+        print("Collection recreated with hybrid schema.")
 
+    # 4. Prepare Data for Ingestion
+    print("Generating embeddings and preparing data...")
+    processed_data = []
+    
+    departments = [
+        "儿科", "内科", "外科", "妇产科", "骨科", "耳鼻喉科", 
+        "眼科", "口腔科", "皮肤科", "急诊科", "中医科"
+    ]
+    
+    # Process in batches to show progress (optional, but good for 1000 items)
+    batch_size = 50
+    for i in range(0, len(data_items), batch_size):
+        batch = data_items[i:i+batch_size]
+        
+        # Extract texts for batch embedding
+        texts = [item["text"] for item in batch]
+        
+        # Generate dense vectors (Text Embedding via CLIP)
+        # Note: CLIP text encoder has a limit of 77 tokens. Long texts will be truncated.
+        vectors = embedding_service.embed_documents(texts)
+        
+        for j, item in enumerate(batch):
+            # Assign a random department for demonstration of filtering
+            dept = random.choice(departments)
+            
+            processed_item = {
+                "id": item["id"],
+                "text": item["text"],
+                "vector": vectors[j],
+                "department": dept,
+                # Store image path in dynamic field for retrieval
+                "image_path": item["image_path"], 
+                # Add other metadata if needed
+                "type": "image-text-pair"
+            }
+            processed_data.append(processed_item)
+            
+        print(f"Processed {min(i + batch_size, len(data_items))}/{len(data_items)}")
 
-        print(cadidates)
+    # 5. Save to Milvus
+    print(f"Inserting {len(processed_data)} items into Milvus...")
+    kb.save(processed_data)
+    print("Ingestion complete.")
+    '''
+
+    # 6. Hybrid Search Example
+    print("\n" + "="*50)
+    print("Running Hybrid Search Example")
+    print("="*50)
+    
+    # Example Query: Combine keywords and semantic meaning
+    # Query intent: Looking for physics formulas related to force, possibly in '内科' (just to test filter, though unlikely match, let's try matching dept)
+    # Let's try a query that matches some content.
+    # Item 1 has "Newton's second law... F=ma".
+    # Let's pretend we are looking for "force formula" in "儿科" (Pediatrics) - unlikely to find, 
+    # but let's try a matching department if we assigned one, or just general search.
+    # We assigned random departments. Let's do a general search first.
+    
+    search_text = "physics force formula Newton"
+    print(f"Query: '{search_text}'")
+    
+    # Generate query vector
+    query_vector = embedding_service.embed_query(search_text)[0]
+    
+    # Perform Hybrid Search
+    # Note: verify_hybrid_search_logic showed us how to call it.
+    # kb.hybrid_search(query_text, query_dense_vector, top_k, rerank)
+    
+    results = kb.hybrid_search(
+        query_text=search_text,
+        query_dense_vector=query_vector,
+        top_k=5,
+        rerank=True
+    )
+    
+    print(f"\nFound {len(results[0])} results:")
+    for idx, hit in enumerate(results[0]):
+        entity = hit.get("entity", {})
+        print(f"\nResult {idx+1}:")
+        print(f"  Score: {hit.get('score')} (Rerank: {hit.get('rerank_score', 'N/A')})")
+        print(f"  ID: {hit.get('id')}")
+        print(f"  Department: {entity.get('department')}")
+        print(f"  Text Snippet: {entity.get('text')[:100]}...")
+        print(f"  Image Path: {entity.get('image_path')}")
+
+    print("\n" + "="*50)
 
 
             
