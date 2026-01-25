@@ -12,3 +12,6 @@
 * 基于clip模型实现多模态知识库
 * 基于pymilvus实现多模态混合检索
 * 实现知识召回的全部完整链路，基于rainxx/Corvus-OCR-Caption-Mix数据集
+* 增加了test_decode.py , 以gpt2模型为例，解释不同的decode方法对于模型生成结果的影响
+* scripts增加数据下载脚本 download_dataset.py
+* 增加模型下载脚本 download_clip_model.py

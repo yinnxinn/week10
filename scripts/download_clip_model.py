@@ -8,10 +8,11 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def download_model():
     repo_id = "openai/clip-vit-base-patch32"
+    repo_id = "openai-community/gpt2"
     
     # Base directory
     base_dir = Path(__file__).resolve().parents[1]
-    models_dir = base_dir / "models" / "clip-vit-base-patch32"
+    models_dir = base_dir / "models" / "gpt2"
     
     print(f"Downloading {repo_id} to {models_dir}...")
     
