@@ -25,11 +25,16 @@ class KnowledgeBase:
         if self.client is not None:
             return
         self.client = MilvusClient(settings.mivlus_host)
+        ## 删库
+        # if self.client.has_collection(settings.collection_name):
+        #     self.client.drop_collection(settings.collection_name)
+        # print('清空数据')
         if not self.client.has_collection(settings.collection_name):
             self.client.create_collection(
                 collection_name=settings.collection_name,
                 dimension=settings.dim,
             )
+        print('create collections')
 
     def save(self, data) -> None:
         self.connect()
@@ -117,42 +122,57 @@ class KnowledgeBase:
         return None
 
 if __name__ == "__main__":
-    # import pandas as pd
-    # path = 'D:/projects/classes/week10/week10/data/me/儿科5-14000.csv'
-    # datas = pd.read_csv(path, encoding='utf-8')
-    # print(datas.head())
-    # import csv
-    # with open('D:/projects/classes/week10/week10/data/me/儿科5-14000.csv', 'r') as r:
-    #     reader = csv.reader(r)
-    #
-    #     datas = list()
-    #     try:
-    #         for item in reader:
-    #             datas.append(item)
-    #     except:
-    #         print(f'读取到{len(datas)}条有效数据')
-    #
-    #     from app.services.embeddings import EmbeddingService
-    #     es = EmbeddingService("sentence-transformers/clip-ViT-B-32")
-    #
-    #     processed_data = list()
-    #     for idx, data in enumerate(datas[1:100]):
-    #         processed_data.append(
-    #             {
-    #                 "id": idx,
-    #                 'department':data[0],
-    #                 "title": data[1],
-    #                 "ask": data[2],
-    #                 "question": data[3],
-    #                 "vector": es.embed_query(data[2] + data[3])[0]
-    #
-    #             }
-    #         )
-        kg = KnowledgeBase()
-        # kg.save(processed_data)
-        query = '男孩子，已经2岁了，这几天，孩子说自己耳朵又痒又疼，早上，有黄色的耳屎流出，另外，好像没什么食欲也很乏力，请问：孩童中耳炎流黄水要如何治疗。 抗生素药物是目前治疗中耳炎比较常用的，可酌情选。如果孩子情况比较严重的话也可配合一些局部治疗，比如消炎型的滴耳剂，孩子耳痛严重的时候，也是可以适量的使用点止痛的药物，要是伴随发高烧的情况，那么根据孩子的症状使用药物，严重的情况请尽快去医院进行救治，以上都是比较常用的治疗方法，但是如果孩子出现了耳膜穿孔的症状，需要及时的去医院进行手术治疗，治疗期间主要要给孩子做好保暖工作，避免着凉加剧症状。'
-        from app.services.embeddings import EmbeddingService
-        es = EmbeddingService("sentence-transformers/clip-ViT-B-32")
+    import pandas as pd
+
+    from app.services.embeddings import EmbeddingService
+
+    es = EmbeddingService("sentence-transformers/clip-ViT-B-32")
+    kg = KnowledgeBase()
+
+    path = 'D:/projects/classes/week10/week10/data/me/儿科5-14000.csv'
+    #datas = pd.read_csv(path, encoding='utf-8')
+    #print(datas.head())
+    import csv
+    with open('D:/projects/classes/week10/week10/data/me/儿科5-14000.csv', 'r') as r:
+        reader = csv.reader(r)
+
+        datas = list()
+        try:
+            for item in reader:
+                datas.append(item)
+        except:
+            print(f'读取到{len(datas)}条有效数据')
+
+
+
+        processed_data = list()
+
+        already_inserts = set()
+
+        for idx, data in enumerate(datas[1:1000]):
+
+            if data[0] in already_inserts:
+                continue
+            else:
+                already_inserts.add(data[0])
+
+            processed_data.append(
+                {
+                    "id": idx,
+                    'department':data[0],
+                    "title": data[1],
+                    "ask": data[2],
+                    "question": data[3],
+                    "vector": es.embed_query(data[1])[0]
+
+                }
+            )
+        
+
+        print(f'得到{len(processed_data)}条数据')
+        kg.save(processed_data)
+    if 1:
+        query = '孩童中耳炎耳朵胀痛该如何医治'
         results = kg.query(es.embed_query(query)[0])
         cadidates = []
         for item in results[0]:
