@@ -15,3 +15,8 @@
 * 增加了test_decode.py , 以gpt2模型为例，解释不同的decode方法对于模型生成结果的影响
 * scripts增加数据下载脚本 download_dataset.py
 * 增加模型下载脚本 download_clip_model.py
+
+
+#### 2026.02.01
+* 增加test_lora.py, 说明lora的工作原理
+* 增加lora_cls.py, 解释模型训练时的lora使用流程，主要基于peft库

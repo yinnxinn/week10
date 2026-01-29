@@ -8,12 +8,13 @@ from huggingface_hub import snapshot_download
 
 def download_dataset():
     repo_id = "rainxx/Corvus-OCR-Caption-Mix"
+    repo_id = 'Leeyuyu/ROCOv2_Thyroid'
     
     # Base data directory
     base_dir = Path(__file__).resolve().parents[1] / "data"
     
     # Target directory for this dataset
-    local_dir = base_dir / "Corvus-OCR-Caption-Mix"
+    local_dir = base_dir / "ROCOv2_Thyroid"
     
     print(f"Downloading {repo_id} to {local_dir}...")
     
