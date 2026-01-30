@@ -91,6 +91,14 @@ class KnowledgeBase:
             max_length=64, 
             description="department tag"
         )
+        # Merged entities for tagging
+        schema.add_field(
+            field_name="tags",
+            datatype=DataType.VARCHAR,
+            max_length=8192,
+            enable_analyzer=True,
+            description="merged entities tags"
+        )
         # Dynamic fields for other metadata
         schema.enable_dynamic_field = True
 
@@ -197,6 +205,31 @@ class KnowledgeBase:
             if dept in query:
                 tags.append(dept)
         return tags
+
+    def search_images(
+        self,
+        query_vector: np.ndarray,
+        top_k: int = 5,
+        search_field: str = "image_vector"
+    ) -> list[dict]:
+        """
+        Search for images using an embedding vector.
+        Args:
+            query_vector: The embedding vector (text or image embedding)
+            top_k: Number of results
+            search_field: The field to search in (usually 'image_vector')
+        """
+        self.connect()
+        
+        results = self.client.search(
+            collection_name=settings.collection_name,
+            data=[query_vector],
+            limit=top_k,
+            search_params={"metric_type": "COSINE", "params": {}},
+            anns_field=search_field, # Explicitly search the image vector field
+            output_fields=["*"],
+        )
+        return results
 
     def hybrid_search(
         self,

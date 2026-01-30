@@ -21,7 +21,7 @@ class Settings:
     rerank_candidates: int = int(os.getenv("RERANK_CANDIDATES", "20"))
 
     mivlus_host = "http://47.111.101.201:19530"
-    collection_name = "week12_kg_online"
+    collection_name = "week13_kg"
     dim = 512
 
     # Text Processing Settings
