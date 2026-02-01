@@ -7,6 +7,7 @@ class LoRALayer(nn.Module):
         super().__init__()
         
         # 1. 模拟预训练权重 (W)，在实际微调中它是冻结的
+        ### w + deltaW --> 相同的shape
         self.weight = nn.Parameter(torch.randn(out_features, in_features))
         self.weight.requires_grad = False  # 冻结原始参数
         

@@ -373,7 +373,7 @@ if __name__ == "__main__":
     from pathlib import Path
     from app.services.embeddings import EmbeddingService
 
-    embedding_service = EmbeddingService("openai/clip-vit-base-patch32")
+    embedding_service = EmbeddingService("D:/projects/classes/week10/week10/models/clip-vit-base-patch32")
     kb = KnowledgeBase()
 
     '''

@@ -173,5 +173,5 @@ def manual_decode_logic_explanation():
 
 if __name__ == "__main__":
     # 运行演示
-    #decoding_demonstration()
-    manual_decode_logic_explanation()
+    decoding_demonstration()
+    #manual_decode_logic_explanation()
