@@ -20,3 +20,8 @@
 #### 2026.02.01
 * 增加test_lora.py, 说明lora的工作原理
 * 增加lora_cls.py, 解释模型训练时的lora使用流程，主要基于peft库
+
+
+#### 2026.02.01
+* 增加知识图谱数据: https://github.com/RuiqingDing/OpenCMKG.git
+* 入库知识图谱，展示知识图谱的用法 test_kg.py
