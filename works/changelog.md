@@ -25,3 +25,10 @@
 #### 2026.02.01
 * 增加知识图谱数据: https://github.com/RuiqingDing/OpenCMKG.git
 * 入库知识图谱，展示知识图谱的用法 test_kg.py
+* 模型部署框架： vllm, ollama , xinference
+
+#### 2026.02.26
+* 增加 RAG / CoT / RAG+CoT 测试用例（test 目录）：
+  * test_rag.py：RAG 检索、提示构建、空上下文回退、与 LLM 集成（mock）
+  * test_cot.py：CoT 分步推理提示、回复解析（推理过程/最终答案）、步骤抽取、与 LLM 集成（mock）
+  * test_rag_cot.py：RAG+CoT 联合流程（检索 + 分步推理提示）、端到端 mock 测试

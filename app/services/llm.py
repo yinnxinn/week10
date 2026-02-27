@@ -3,7 +3,7 @@ import os
 
 class LLMService:
     def __init__(self, api_key: str = None, base_url: str = None, model: str = None):
-        self.api_key = api_key or os.getenv("SILICONFLOW_API_KEY") or "sk-lyrzoilwprfhhpeddrmoqzbvwlxnqzezjphlqqsvzxjbebra"
+        self.api_key = api_key or os.getenv("SILICONFLOW_API_KEY") or "sk-yyyvuckwvwpzuanghmegtoszbpezmhfycaihzzsjicidshwc"
         self.base_url = base_url or os.getenv("SILICONFLOW_BASE_URL") or "https://api.siliconflow.cn/v1"
         self.model = model or os.getenv("SILICONFLOW_MODEL") or "Pro/zai-org/GLM-4.7"
         

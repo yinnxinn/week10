@@ -70,6 +70,18 @@ if prompt:
         full_response = ""
         
         with st.spinner("正在分析医疗数据..."):
+
+            ## sol1
+            ## 1. 先走知识图谱，获取最确定的知识
+            ## 2， 走知识库，获取多模态多模态相关知识
+            ## 3. prompt工程，让大模型凭借自身能力做出一些专科可靠的回答
+            ## 4. 兜底 --> 对不起，暂时无法解决您的问题
+
+            ### sol2
+            ## 1. rewrite_query ：匹配知识库节点 rewrite_query  -> 再搜知识库
+            ## 2. 走知识库，获取相关知识
+            ## 3. 参考知识形成 = 1+2 ，综合的的参考，形成只是参考，结合llm回答问题
+
             try:
                 # 1. Embed
                 query_vector = embedding_service.embed_query(prompt)[0]
@@ -158,3 +170,6 @@ if prompt:
                 
             except Exception as e:
                 st.error(f"处理请求时发生错误: {e}")
+
+
+### python -m streamlit run app/web_ui.py
