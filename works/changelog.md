@@ -32,3 +32,8 @@
   * test_rag.py：RAG 检索、提示构建、空上下文回退、与 LLM 集成（mock）
   * test_cot.py：CoT 分步推理提示、回复解析（推理过程/最终答案）、步骤抽取、与 LLM 集成（mock）
   * test_rag_cot.py：RAG+CoT 联合流程（检索 + 分步推理提示）、端到端 mock 测试
+* 前端流式输出优化（app/web_ui.py + app/services/llm.py）：
+  * LLM 服务新增 `get_consultation_suggestion_stream()`，使用 `stream=True` 逐 chunk 返回内容
+  * 检索阶段仅显示「正在检索知识库」spinner，检索完成后关闭
+  * 智能分析/诊疗建议部分改为流式展示，随 LLM 返回实时更新 `message_placeholder.markdown()`
+  * 对话历史仍保存完整回复内容
