@@ -44,7 +44,7 @@
 3. **批量入库**
 
    ```bash
-   python scripts/ingest.py --source data/raw --chunk-size 300 --chunk-overlap 50
+   python -m scripts.ingest --source data/raw --chunk-size 300 --chunk-overlap 50
    ```
 
    命令执行后会生成或更新：
@@ -58,6 +58,7 @@
    uvicorn app.main:app --reload
    ```
 
+   - 默认文档地址：`http://127.0.0.1:8000/docs`
    - `GET /api/health`：健康检查
    - `POST /api/ingest`：直接通过接口写入新的文本片段
    - `POST /api/query`：语义检索，返回相似文本及相似度
